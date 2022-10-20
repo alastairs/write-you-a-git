@@ -1,27 +1,33 @@
-use clap::Parser;
+mod repository;
 
+use clap::{Parser, Subcommand};
+
+/// The stupid content tracker
 #[derive(Parser, Debug)]
-#[command(author, version, about, long_about = None)]
+#[command(name = "wyag", version, about, long_about = None)]
 struct Args {
     /// The command to run: add, checkout, commit, ...
-    command: String,
+    #[command(subcommand)]
+    command: Option<GitCommands>,
+}
+
+#[derive(Subcommand, Debug)]
+enum GitCommands {
+    Init { directory: String },
 }
 
 fn main() {
+    env_logger::init();
     let args = Args::parse();
-    if args.command == "add" {
-        cmd_add(args)
-    } else if args.command == "init" {
-        cmd_init(args)
-    } // else if ...
-}
 
-fn cmd_add(args: Args) {
-    
-}
+    let result = match args.command {
+        Some(GitCommands::Init { directory: path }) => {
+            repository::repository::Repository::repo_create(path)
+        }
+        None => Ok({}),
+    };
 
-fn cmd_init(args: Args) {
-    todo!()
+    result.expect("?");
 }
 
 #[cfg(test)]
