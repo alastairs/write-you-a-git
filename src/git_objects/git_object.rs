@@ -4,7 +4,7 @@ use std::{
 };
 
 use crypto::{digest::Digest, sha1::Sha1};
-use flate2::read::{self, ZlibDecoder};
+use flate2::read::ZlibDecoder;
 
 use crate::repository::repository::Repository;
 
@@ -12,11 +12,11 @@ struct GitObject {
     repo: Option<Repository>,
 }
 
-struct GitObjectData(String, Vec<u8>);
+pub(crate) struct GitObjectData(String, Vec<u8>);
 
 impl GitObject {
     pub fn new(repo: Repository, data: Option<GitObjectData>) -> GitObject {
-        let object = GitObject { repo: Some(repo) };
+        let mut object = GitObject { repo: Some(repo) };
         match data {
             Some(data) => object.deserialize(data),
             None => {}
@@ -53,7 +53,7 @@ impl GitObject {
     fn write_object(obj: GitObject, actually_write: Option<bool>) -> String {
         let GitObjectData(fmt, data_vec) = obj.serialize();
 
-        let data_string = String::from_utf8(data_vec).unwrap();
+        let data_string = String::from_utf8(data_vec.to_vec()).unwrap();
         let data_length = data_string.len();
 
         let result = [
@@ -94,17 +94,17 @@ impl GitObject {
     }
 }
 
-trait GitSerDe {
-    fn serialize(&self) -> GitObjectData;
-    fn deserialize(&self, data: GitObjectData);
+pub(crate) trait GitSerDe {
+    fn serialize(&self) -> &GitObjectData;
+    fn deserialize(&mut self, data: GitObjectData);
 }
 
 impl GitSerDe for GitObject {
-    fn serialize(&self) -> GitObjectData {
+    fn serialize(&self) -> &GitObjectData {
         todo!()
     }
 
-    fn deserialize(&self, data: GitObjectData) {
+    fn deserialize(&mut self, data: GitObjectData) {
         todo!()
     }
 }
