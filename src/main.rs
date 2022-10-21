@@ -1,3 +1,4 @@
+mod git_objects;
 mod repository;
 
 use clap::{Parser, Subcommand};

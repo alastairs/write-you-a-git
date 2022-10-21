@@ -158,7 +158,7 @@ pub mod repository {
         ///Same as repo_path, but create dirname(path_segments) if absent.  For
         ///example, r.repo_file(&["refs", "remotes", "origin", "HEAD"]) will create
         ///.git/refs/remotes/origin.
-        fn repo_file(&self, path_segments: &[&str], mkdir: Option<bool>) -> PathBuf {
+        pub fn repo_file(&self, path_segments: &[&str], mkdir: Option<bool>) -> PathBuf {
             return match self.repo_dir(&path_segments[0..path_segments.len() - 1], mkdir) {
                 Ok(_) => self.repo_path(&path_segments),
                 Err(e) => panic!("{}", e),
