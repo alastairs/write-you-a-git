@@ -1,11 +1,14 @@
 pub mod repository {
     use std::{
         fs::{create_dir_all, File},
-        io::{self, Write},
+        io::{self, Read, Write},
         path::{Path, PathBuf, MAIN_SEPARATOR},
     };
 
     use configparser::ini::{Ini, IniDefault};
+    use flate2::read::ZlibDecoder;
+
+    use crate::git_objects::git_object::GitObjectData;
 
     /// A git repository
     pub struct Repository {
@@ -20,7 +23,7 @@ pub mod repository {
         /// # Panics
         ///
         /// Panics if .
-        fn new(path: &String, force: bool) -> Repository {
+        pub(crate) fn new(path: &String, force: bool) -> Repository {
             let worktree = Path::new(&path).to_path_buf();
             let git_dir = worktree.join(".git");
             let config = Ini::new();
@@ -190,6 +193,40 @@ pub mod repository {
                 Ok(()) => Ok(repo_path),
                 Err(e) => Err(e),
             };
+        }
+
+        /// Read object object_id from Git repository repo.  Return a
+        /// GitObject.
+        pub(crate) fn read_object(&self, sha: String) -> Result<GitObjectData, std::io::Error> {
+            let path = self.repo_file(&["objects", &sha[0..2], &sha[2..]], None);
+            let f = File::open(path)?;
+
+            let mut raw = Vec::new();
+            ZlibDecoder::new(f).read_to_end(&mut raw)?;
+
+            let x = raw.iter().position(|b| b == &b' ').unwrap();
+            let object_type = String::from_utf8(raw[0..x].to_vec()).unwrap();
+
+            let y = raw.iter().position(|b| b == &b'\x00').unwrap();
+            let size = String::from_utf8(raw[x..y].to_vec())
+                .unwrap()
+                .parse::<usize>()
+                .unwrap();
+
+            if size != raw.len() - y - 1 {
+                panic!("Malformed object {}: bad length", sha)
+            }
+
+            return Ok(GitObjectData(object_type, raw));
+        }
+
+        pub(crate) fn object_find(
+            &self,
+            name: String,
+            _fmt: Option<String>,
+            _follow: Option<bool>,
+        ) -> String {
+            return name;
         }
     }
 }
