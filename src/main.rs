@@ -9,10 +9,7 @@ use std::{
 use clap::{Parser, Subcommand};
 use git_objects::git_object::GitObjectData;
 
-use crate::{
-    git_objects::git_object::{GitObject, GitSerDe},
-    repository::repository::Repository,
-};
+use crate::{git_objects::git_object::GitObject, repository::repository::Repository};
 
 /// The stupid content tracker
 #[derive(Parser, Debug)]
@@ -108,10 +105,9 @@ fn object_hash(
     let mut data = Vec::<u8>::new();
     fd.read_to_end(&mut data)?;
 
-    return Ok(GitObject::write_object(
-        GitObject::new(repo, Some(GitObjectData(fmt, data))),
-        None,
-    ));
+    let write_object =
+        GitObject::write_object(GitObject::new(repo, Some(GitObjectData(fmt, data))), None);
+    return Ok(write_object);
 }
 
 #[cfg(test)]
