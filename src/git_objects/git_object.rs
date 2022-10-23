@@ -10,6 +10,7 @@ use crate::{
 
 pub(crate) struct GitObject {}
 
+#[derive(Debug)]
 pub(crate) struct GitObjectData(pub String, pub Vec<u8>);
 
 impl GitObject {
@@ -123,7 +124,7 @@ impl GitObjectData {
                 .skip(end + 1)
                 .position(|b| b == &b'\n')
                 .unwrap()
-                + start
+                + end
                 + 1;
 
             if data_vec[end + 1] != b' ' {
@@ -193,6 +194,23 @@ mod tests {
 parent 5f350c20eb579d51d0a3b1fafc8fce3f26d9d61a
 author Alastair Smith <github@alastairsmith.me.uk> 1666471801 +0100
 committer Alastair Smith <github@alastairsmith.me.uk> 1666471801 +0100
+gpgsig -----BEGIN PGP SIGNATURE-----
+ 
+ iQJPBAABCgA5FiEEcAUvar0ofFepLhfUJfqdqODN8YIFAmNUV/YbHGdpdGh1YkBh
+ bGFzdGFpcnNtaXRoLm1lLnVrAAoJECX6najgzfGC/xYP/Rw37i0K2168upfp2OLO
+ NCKyqXgcRbF8YgzajH4YAK/JIRko8/I3haINQofIRRop0gw4Qih3RvEQ5bBXh2xf
+ Y1w9WyaDqwBz09zMKE5GMsZQ4xZ7HjqLq/iOXhwx7vEwAg77WrYJgqgzuC8qYHCr
+ CIm0Ni7rJSL5Rn2chuxzOs3RdwMNSSnmMgbvYkASHuBAAMSiALT2XOZM8zK1smx4
+ RpI2xc7cS/2E+2OdBgwF4fg64b/vWtRcNZpfF31L3VVi1KlObtgyAlR/gMLxA/G9
+ PNn1G47rgb09lAYjz3akwl3sZyeawDZ6sJPONYKl+hIq+qFKDYvh4wL98zDZBkrc
+ LjvXCZAjionPN/f54sh+71Ec5r6j0y0I3nXXPHCGyl+tUlj7Rkm+vTPaa1FpfKJA
+ pQQt2cnItDi5rixteGqGlk2Kmpi9LkQUSOFu9a5VV0I7zcbaT6sNXDIJZNwCYSSc
+ Q4dEpZSV1EYePUl9GWYWXCvf0inqFaGGOI2CTaHXvRE0c9llhgbFNTkIpCm1G5pL
+ 7H7T4FIkxLPUHOGTsfUaZ0hT0UVf48eO0HUxDr6jjKDdPSMZMMcQVy1eaAmRehZO
+ 73ezq3oPt/gPCssAk+vbriGjp9hFY7QwrmiZnivtM62yTqVxPHIixgjwOd87Q8h4
+ Dsu+R6iJ+fYrbCCZSELWGA4Z
+ =SBeJ
+ -----END PGP SIGNATURE-----
 
 Implement Commit object type
 
@@ -288,6 +306,40 @@ which I think has now been handled via traits and Box. Let's see if wyag
 commit works...
 ",
             parsed.get("").expect("Message is empty")[0]
+        );
+
+        return Ok(());
+    }
+
+    #[test]
+    fn test_can_parse_gpgsig_key_value() -> Result<(), FromUtf8Error> {
+        let commit = COMMIT_EXAMPLE;
+        let commit_object = GitObjectData(
+            "commit".to_string(),
+            String::from(commit).as_bytes().to_vec(),
+        );
+
+        let parsed = commit_object.kvlm_parse(None, None)?;
+
+        assert_eq!(
+            "-----BEGIN PGP SIGNATURE-----
+
+iQJPBAABCgA5FiEEcAUvar0ofFepLhfUJfqdqODN8YIFAmNUV/YbHGdpdGh1YkBh
+bGFzdGFpcnNtaXRoLm1lLnVrAAoJECX6najgzfGC/xYP/Rw37i0K2168upfp2OLO
+NCKyqXgcRbF8YgzajH4YAK/JIRko8/I3haINQofIRRop0gw4Qih3RvEQ5bBXh2xf
+Y1w9WyaDqwBz09zMKE5GMsZQ4xZ7HjqLq/iOXhwx7vEwAg77WrYJgqgzuC8qYHCr
+CIm0Ni7rJSL5Rn2chuxzOs3RdwMNSSnmMgbvYkASHuBAAMSiALT2XOZM8zK1smx4
+RpI2xc7cS/2E+2OdBgwF4fg64b/vWtRcNZpfF31L3VVi1KlObtgyAlR/gMLxA/G9
+PNn1G47rgb09lAYjz3akwl3sZyeawDZ6sJPONYKl+hIq+qFKDYvh4wL98zDZBkrc
+LjvXCZAjionPN/f54sh+71Ec5r6j0y0I3nXXPHCGyl+tUlj7Rkm+vTPaa1FpfKJA
+pQQt2cnItDi5rixteGqGlk2Kmpi9LkQUSOFu9a5VV0I7zcbaT6sNXDIJZNwCYSSc
+Q4dEpZSV1EYePUl9GWYWXCvf0inqFaGGOI2CTaHXvRE0c9llhgbFNTkIpCm1G5pL
+7H7T4FIkxLPUHOGTsfUaZ0hT0UVf48eO0HUxDr6jjKDdPSMZMMcQVy1eaAmRehZO
+73ezq3oPt/gPCssAk+vbriGjp9hFY7QwrmiZnivtM62yTqVxPHIixgjwOd87Q8h4
+Dsu+R6iJ+fYrbCCZSELWGA4Z
+=SBeJ
+-----END PGP SIGNATURE-----",
+            parsed.get("gpgsig").expect("gpgsig is empty")[0]
         );
 
         return Ok(());

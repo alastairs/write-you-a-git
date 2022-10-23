@@ -2,12 +2,15 @@ mod git_objects;
 mod repository;
 
 use std::{
+    collections::HashSet,
     fs::File,
     io::{stdout, Read, Write},
+    path::Path,
 };
 
 use clap::{Parser, Subcommand};
 use git_objects::git_object::GitObjectData;
+use repository::repository::ReadObjectErrorType;
 
 use crate::{git_objects::git_object::GitObject, repository::repository::Repository};
 
@@ -26,7 +29,7 @@ enum GitCommands {
         directory: String,
     },
 
-    /// Provider content of repository objects
+    /// Provider content of repository objects.
     #[command(name = "cat-file", about)]
     CatFile {
         /// Specify the type
@@ -35,7 +38,7 @@ enum GitCommands {
         object: String,
     },
 
-    /// Compute object ID and optionally creates a blob from a file
+    /// Compute object ID and optionally creates a blob from a file.
     #[command(name = "hash-object", about)]
     HashObject {
         /// Specify the type
@@ -49,24 +52,36 @@ enum GitCommands {
         /// Read object from <path>
         path: String,
     },
+
+    /// Display history of a given commit.
+    Log {
+        /// Commit to start at
+        commit: Option<String>,
+    },
 }
 
-fn main() {
+fn main() -> Result<(), ReadObjectErrorType> {
     env_logger::init();
     let args = Args::parse();
 
-    let result = match args.command {
-        Some(GitCommands::Init { directory: path }) => Repository::repo_create(path),
-        Some(GitCommands::CatFile { r#type, object }) => cat_file(r#type, &object),
+    return match args.command {
+        Some(GitCommands::Init { directory: path }) => {
+            Repository::repo_create(Path::new(&path)).map_err(ReadObjectErrorType::IO)
+        }
+        Some(GitCommands::CatFile { r#type, object }) => {
+            cat_file(r#type, &object).map_err(ReadObjectErrorType::IO)
+        }
         Some(GitCommands::HashObject {
             r#type,
             write,
             path,
-        }) => hash_file(r#type, write, path),
+        }) => hash_file(r#type, write, path).map_err(ReadObjectErrorType::IO),
+        Some(GitCommands::Log { commit }) => match commit {
+            Some(commit) => print_log(commit),
+            None => print_log("HEAD".to_string()),
+        },
         None => Ok({}),
     };
-
-    result.expect("?");
 }
 
 fn cat_file(r#type: String, object: &String) -> Result<(), std::io::Error> {
@@ -75,9 +90,8 @@ fn cat_file(r#type: String, object: &String) -> Result<(), std::io::Error> {
         .unwrap();
 
     let sha = repo.object_find(String::from(object), Some(r#type), None);
-    let data = repo.read_object(sha).unwrap();
+    let object = repo.read_object(sha).unwrap();
 
-    let object = GitObject::new(Some(repo), Some(data));
     let GitObjectData(_, data) = object.serialize();
     stdout().write(data.as_slice())?;
 
@@ -86,7 +100,7 @@ fn cat_file(r#type: String, object: &String) -> Result<(), std::io::Error> {
 
 fn hash_file(r#type: String, write: bool, path: String) -> Result<(), std::io::Error> {
     let repo = match write {
-        true => Some(Repository::new(&String::from("."), false)),
+        true => Some(Repository::new(&Path::new("."), false)),
         false => None,
     };
 
@@ -110,11 +124,15 @@ fn object_hash(
     return Ok(write_object);
 }
 
-#[cfg(test)]
-mod tests {
-    #[test]
-    fn it_works() {
-        let result = 2 + 2;
-        assert_eq!(result, 4);
-    }
+fn print_log(commit: String) -> Result<(), ReadObjectErrorType> {
+    let repo = Repository::repo_find(".".to_string(), None)
+        .expect("No git directory when required")
+        .unwrap();
+
+    print!("digraph wyaglog{{");
+    let sha = repo.object_find(commit.clone(), None, None);
+    repo.log_graphviz(sha, &mut HashSet::new())?;
+    print!("}}");
+
+    return Ok(());
 }

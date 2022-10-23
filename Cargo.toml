@@ -10,8 +10,9 @@ panic = 'abort'
 
 [dependencies]
 clap = { version = "4.0.15", features = ["derive"] }
-flate2 = { version = "1.0" }
 configparser = { version = "3.0.2" }
 env_logger = { version = "0.9.1" }
+flate2 = { version = "1.0" }
 ini = { version = "1.3.0" }
+log = { version = "0.4.17" }
 rust-crypto = { version = "0.2.36" }

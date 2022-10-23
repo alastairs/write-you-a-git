@@ -1,20 +1,35 @@
 pub mod repository {
     use std::{
+        collections::HashSet,
         fs::{create_dir_all, File},
         io::{self, Read, Write},
+        num::ParseIntError,
         path::{Path, PathBuf, MAIN_SEPARATOR},
+        string::FromUtf8Error,
     };
 
     use configparser::ini::{Ini, IniDefault};
     use flate2::read::ZlibDecoder;
 
-    use crate::git_objects::git_object::GitObjectData;
+    use crate::git_objects::{
+        git_blob::Blob,
+        git_commit::Commit,
+        git_object::{GitObjectData, GitSerDe},
+    };
 
     /// A git repository
+    #[derive(Clone)]
     pub struct Repository {
         worktree: PathBuf,
         git_dir: PathBuf,
         config: Ini,
+    }
+
+    #[derive(Debug)]
+    pub(crate) enum ReadObjectErrorType {
+        FromUtf8Error(FromUtf8Error),
+        IO(io::Error),
+        ParseIntError(ParseIntError),
     }
 
     impl Repository {
@@ -23,8 +38,8 @@ pub mod repository {
         /// # Panics
         ///
         /// Panics if .
-        pub(crate) fn new(path: &String, force: bool) -> Repository {
-            let worktree = Path::new(&path).to_path_buf();
+        pub(crate) fn new(path: &Path, force: bool) -> Repository {
+            let worktree = path.to_path_buf();
             let git_dir = worktree.join(".git");
             let config = Ini::new();
 
@@ -35,13 +50,14 @@ pub mod repository {
             };
 
             if !(force || me.git_dir.is_dir()) {
-                panic!("Not a Git repository {}", path)
+                panic!("Not a Git repository {:#?}", path)
             }
 
             // Read the config
             let repo_config = me.repo_file(&["config"], None);
+
             if repo_config.exists() {
-                me.config.load(repo_config).unwrap();
+                me.config.load(&repo_config).unwrap();
             } else if !force {
                 panic!("Configuration file missing")
             }
@@ -57,18 +73,18 @@ pub mod repository {
         }
 
         /// Create a new repository at path
-        pub fn repo_create(path: String) -> Result<(), io::Error> {
+        pub fn repo_create(path: &Path) -> Result<(), io::Error> {
             let mut repo = Repository::new(&path, true);
 
             // Make sure the path either doesn't exist, or is empty
             if repo.worktree.exists() {
                 if !repo.worktree.is_dir() {
-                    panic!("{} is not a directory!", path);
+                    panic!("{:#?} is not a directory!", path);
                 }
 
                 let is_empty = repo.worktree.read_dir()?.next().is_none();
                 if !is_empty {
-                    panic!("{} is not empty!", path);
+                    panic!("{:#?} is not empty!", path);
                 }
             } else {
                 create_dir_all(&repo.worktree).unwrap();
@@ -125,7 +141,7 @@ pub mod repository {
 
             let is_dir = my_path.join(".git").is_dir();
             if is_dir {
-                return Ok(Some(Repository::new(&path, false)));
+                return Ok(Some(Repository::new(&my_path, false)));
             }
 
             // If we haven't returned, recurse in parent
@@ -197,27 +213,56 @@ pub mod repository {
 
         /// Read object object_id from Git repository repo.  Return a
         /// GitObject.
-        pub(crate) fn read_object(&self, sha: String) -> Result<GitObjectData, std::io::Error> {
+        pub(crate) fn read_object(
+            &self,
+            sha: String,
+        ) -> Result<Box<dyn GitSerDe>, ReadObjectErrorType> {
+            log::debug!("Retrieving file for object '{}'", sha);
             let path = self.repo_file(&["objects", &sha[0..2], &sha[2..]], None);
-            let f = File::open(path)?;
+            log::debug!("Found file {:?}", path);
+            let f = File::open(path).map_err(ReadObjectErrorType::IO)?;
 
             let mut raw = Vec::new();
-            ZlibDecoder::new(f).read_to_end(&mut raw)?;
+            ZlibDecoder::new(f)
+                .read_to_end(&mut raw)
+                .map_err(ReadObjectErrorType::IO)?;
 
+            log::debug!("Determining type of object '{}'", sha);
             let x = raw.iter().position(|b| b == &b' ').unwrap();
             let object_type = String::from_utf8(raw[0..x].to_vec()).unwrap();
+            log::debug!("Object is of type {:?}", object_type);
 
-            let y = raw.iter().position(|b| b == &b'\x00').unwrap();
-            let size = String::from_utf8(raw[x..y].to_vec())
-                .unwrap()
+            log::debug!("Determining size of object '{}'", sha);
+            let mut _y = raw.iter().skip(x).position(|b| b == &b'\x00');
+            let y = *_y.get_or_insert(x) + x;
+            let size = String::from_utf8(raw[x + 1..y].to_vec())
+                .map_err(ReadObjectErrorType::FromUtf8Error)?
                 .parse::<usize>()
-                .unwrap();
+                .map_err(ReadObjectErrorType::ParseIntError)?;
+            log::debug!("Object is {} bytes large", size);
 
             if size != raw.len() - y - 1 {
                 panic!("Malformed object {}: bad length", sha)
             }
 
-            return Ok(GitObjectData(object_type, raw));
+            log::debug!("Obtaining object data for {}", sha);
+            let object_data = raw[y + 1..].to_vec();
+            log::debug!(
+                "Object has data {:?}",
+                String::from_utf8(object_data.clone())
+                    .map_err(ReadObjectErrorType::FromUtf8Error)?
+            );
+            return match object_type.as_str() {
+                "commit" => Ok(Box::new(Commit::new(
+                    Some(self.clone()),
+                    GitObjectData(object_type, object_data),
+                ))),
+                "blob" => Ok(Box::new(Blob::new(
+                    Some(self.clone()),
+                    GitObjectData(object_type, object_data),
+                ))),
+                _ => panic!("Unknown type"),
+            };
         }
 
         pub(crate) fn object_find(
@@ -227,6 +272,36 @@ pub mod repository {
             _follow: Option<bool>,
         ) -> String {
             return name;
+        }
+
+        pub(crate) fn log_graphviz(
+            &self,
+            sha: String,
+            seen: &mut HashSet<String>,
+        ) -> Result<(), ReadObjectErrorType> {
+            if !seen.insert(sha.clone()) {
+                return Ok(());
+            }
+
+            log::debug!("Reading object '{}'...", sha);
+            let object = self.read_object(sha.clone())?;
+            log::debug!("Found object '{}' with type {:?}", sha, object.get_data());
+            let commit = Commit::new(Some(self.clone()), object.get_data());
+
+            log::debug!("Checking for parent commit...");
+            if !commit.has_parent() {
+                // Base case: the initial commit
+                return Ok(());
+            }
+
+            let parents = commit.parents();
+
+            for p in parents {
+                print!("c_{} -> x_{};", sha, p);
+                self.log_graphviz(p.to_string(), seen)?;
+            }
+
+            return Ok(());
         }
     }
 }

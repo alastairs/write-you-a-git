@@ -9,6 +9,16 @@ pub(crate) struct Commit {
     kvlm: BTreeMap<String, Vec<String>>,
 }
 
+impl Commit {
+    pub(crate) fn has_parent(&self) -> bool {
+        return self.kvlm.contains_key("parent");
+    }
+
+    pub(crate) fn parents(&self) -> &Vec<String> {
+        return self.kvlm.get("parent").unwrap();
+    }
+}
+
 impl GitSerDe for Commit {
     fn new(repo: Option<Repository>, data: GitObjectData) -> Commit {
         let mut commit = Commit {

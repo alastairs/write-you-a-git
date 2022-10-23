@@ -425,5 +425,6 @@ dependencies = [
  "env_logger",
  "flate2",
  "ini",
+ "log",
  "rust-crypto",
 ]
