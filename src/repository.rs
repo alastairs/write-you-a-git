@@ -297,7 +297,7 @@ pub mod repository {
             let parents = commit.parents();
 
             for p in parents {
-                print!("c_{} -> x_{};", sha, p);
+                print!("c_{} -> c_{};", sha, p);
                 self.log_graphviz(p.to_string(), seen)?;
             }
 
