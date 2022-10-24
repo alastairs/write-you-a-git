@@ -344,4 +344,21 @@ Dsu+R6iJ+fYrbCCZSELWGA4Z
 
         return Ok(());
     }
+
+    #[test]
+    fn test_can_round_trip_serialized_objects() -> Result<(), FromUtf8Error> {
+        let commit = COMMIT_EXAMPLE;
+        let commit_object = GitObjectData(
+            "commit".to_string(),
+            String::from(commit).as_bytes().to_vec(),
+        );
+
+        let parsed_src = commit_object.kvlm_parse(None, None)?;
+        let serialized = GitObjectData::kvlm_serialize(&parsed_src);
+        let parsed_serialized = serialized.kvlm_parse(None, None)?;
+
+        assert_eq!(parsed_src, parsed_serialized);
+
+        return Ok(());
+    }
 }
