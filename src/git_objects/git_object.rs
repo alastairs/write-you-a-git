@@ -4,7 +4,7 @@ use crypto::{digest::Digest, sha1::Sha1};
 use flate2::read::ZlibDecoder;
 
 use crate::{
-    git_objects::{git_blob::Blob, git_commit::Commit},
+    git_objects::{git_blob::Blob, git_commit::Commit, git_tree::Tree},
     repository::repository::Repository,
 };
 
@@ -21,6 +21,7 @@ impl GitObject {
                 let boxed: Box<dyn GitSerDe> = match object_type.as_str() {
                     "blob" => Box::new(Blob::new(repo, GitObjectData(object_type, data))),
                     "commit" => Box::new(Commit::new(repo, GitObjectData(object_type, data))),
+                    "tree" => Box::new(Tree::new(repo, GitObjectData(object_type, data))),
                     _ => panic!(),
                 };
 
