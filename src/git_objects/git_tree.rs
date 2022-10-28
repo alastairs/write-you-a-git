@@ -1,3 +1,5 @@
+use std::any::Any;
+
 use crate::repository::repository::Repository;
 
 use super::git_object::{GitObjectData, GitSerDe};
@@ -30,6 +32,10 @@ impl GitSerDe for Tree {
 
     fn get_repo(&self) -> &Repository {
         return self.repo.as_ref().expect("No repo set");
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
     }
 }
 

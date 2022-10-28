@@ -1,3 +1,5 @@
+use std::any::Any;
+
 use crate::{git_objects::git_object::GitObjectData, repository::repository::Repository};
 
 use super::git_object::GitSerDe;
@@ -29,5 +31,9 @@ impl GitSerDe for Blob {
 
         blob.deserialize(data);
         return blob;
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
     }
 }

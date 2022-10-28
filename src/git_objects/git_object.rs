@@ -1,4 +1,4 @@
-use std::{collections::BTreeMap, fs::File, io::Write, string::FromUtf8Error};
+use std::{any::Any, collections::BTreeMap, fs::File, io::Write, string::FromUtf8Error};
 
 use crypto::{digest::Digest, sha1::Sha1};
 use flate2::read::ZlibDecoder;
@@ -185,6 +185,8 @@ pub(crate) trait GitSerDe {
     fn get_data(&self) -> GitObjectData {
         return self.serialize();
     }
+
+    fn as_any(&self) -> &dyn Any;
 }
 
 #[cfg(test)]
