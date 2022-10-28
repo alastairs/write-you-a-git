@@ -15,6 +15,7 @@ pub mod repository {
         git_blob::Blob,
         git_commit::Commit,
         git_object::{GitObjectData, GitSerDe},
+        git_tree::Tree,
     };
 
     /// A git repository
@@ -242,24 +243,25 @@ pub mod repository {
             log::debug!("Object is {} bytes large", size);
 
             if size != raw.len() - y - 1 {
-                panic!("Malformed object {}: bad length", sha)
+                panic!("Malformed object '{}': bad length", sha)
             }
 
-            log::debug!("Obtaining object data for {}", sha);
-            let object_data = raw[y + 1..].to_vec();
-            log::debug!(
-                "Object has data {:?}",
-                String::from_utf8(object_data.clone())
-                    .map_err(ReadObjectErrorType::FromUtf8Error)?
-            );
+            log::debug!("Obtaining object data for '{}'", sha);
+            let object_data = &raw[y + 1..];
+            log::debug!("Object has data with {:?} bytes", object_data.len());
+
             return match object_type.as_str() {
                 "commit" => Ok(Box::new(Commit::new(
                     Some(self.clone()),
-                    GitObjectData(object_type, object_data),
+                    GitObjectData(object_type, object_data.to_vec()),
                 ))),
                 "blob" => Ok(Box::new(Blob::new(
                     Some(self.clone()),
-                    GitObjectData(object_type, object_data),
+                    GitObjectData(object_type, object_data.to_vec()),
+                ))),
+                "tree" => Ok(Box::new(Tree::new(
+                    Some(self.clone()),
+                    GitObjectData(object_type, object_data.to_vec()),
                 ))),
                 _ => panic!("Unknown type"),
             };
