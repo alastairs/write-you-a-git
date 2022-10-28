@@ -9,7 +9,10 @@ use std::{
 };
 
 use clap::{Parser, Subcommand};
-use git_objects::git_object::GitObjectData;
+use git_objects::{
+    git_object::GitObjectData,
+    git_tree::{Leaf, Tree},
+};
 use repository::repository::ReadObjectErrorType;
 
 use crate::{git_objects::git_object::GitObject, repository::repository::Repository};
@@ -58,6 +61,13 @@ enum GitCommands {
         /// Commit to start at
         commit: Option<String>,
     },
+
+    /// Pretty-print a tree object.
+    #[command(name = "ls-tree", about)]
+    LsTree {
+        /// The object to show.
+        object: String,
+    },
 }
 
 fn main() -> Result<(), ReadObjectErrorType> {
@@ -80,6 +90,7 @@ fn main() -> Result<(), ReadObjectErrorType> {
             Some(commit) => print_log(commit),
             None => print_log("HEAD".to_string()),
         },
+        Some(GitCommands::LsTree { object }) => ls_tree(&object),
         None => Ok({}),
     };
 }
@@ -134,5 +145,30 @@ fn print_log(commit: String) -> Result<(), ReadObjectErrorType> {
     repo.log_graphviz(sha, &mut HashSet::new())?;
     print!("}}");
 
+    return Ok(());
+}
+
+fn ls_tree(object: &String) -> Result<(), ReadObjectErrorType> {
+    let repo = Repository::repo_find(".".to_string(), None)
+        .expect("No git directory when required")
+        .unwrap();
+    let sha = repo.object_find(object.clone(), Some("tree".to_owned()), None);
+    let object = repo.read_object(sha)?;
+    let object = object
+        .as_any()
+        .downcast_ref::<Tree>()
+        .expect("Not a Tree object.");
+
+    for item in &object.items {
+        let Leaf(mode, path, sha) = item;
+        let GitObjectData(fmt, _) = (*repo.read_object(sha.to_string())?).get_data();
+        println!(
+            "{} {} {}\t{}",
+            "0".repeat(6 - mode.len()) + mode.as_str(),
+            fmt,
+            &sha,
+            path
+        )
+    }
     return Ok(());
 }
