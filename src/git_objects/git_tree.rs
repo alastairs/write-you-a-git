@@ -5,7 +5,7 @@ use crate::repository::repository::Repository;
 use super::git_object::{GitObjectData, GitSerDe};
 
 pub(crate) struct Tree {
-    items: Vec<Leaf>,
+    pub(crate) items: Vec<Leaf>,
     repo: Option<Repository>,
 }
 
@@ -42,7 +42,7 @@ impl GitSerDe for Tree {
 /// A leaf in git's tree is a triple of:
 /// (file mode, path, sha1)
 #[derive(Debug)]
-struct Leaf(String, String, String);
+pub(crate) struct Leaf(pub(crate) String, pub(crate) String, pub(crate) String);
 
 fn tree_serialize(tree: &Tree) -> GitObjectData {
     let mut serialized = String::new();
@@ -86,14 +86,16 @@ fn tree_parse_one(raw: &Vec<u8>, start: Option<usize>) -> Option<(usize, Leaf)> 
     let path = &raw[x + 1..y];
 
     // Read the SHA and convert it to a hex string
-    let sha = &raw[y + 1..y + 21];
+    let sha = hex::encode(&raw[y + 1..y + 21]);
+
+    log::debug!("SHA slice is: {:02X?}", sha);
 
     return Some((
         y + 21,
         Leaf(
-            String::from_utf8(mode.to_vec()).unwrap(),
-            String::from_utf8(path.to_vec()).unwrap(),
-            String::from_utf8(sha.to_vec()).unwrap(),
+            String::from_utf8(mode.to_vec()).expect("Could not parse mode from tree object"),
+            String::from_utf8(path.to_vec()).expect("Could not parse path from tree object"),
+            sha,
         ),
     ));
 }
