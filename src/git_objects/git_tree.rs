@@ -18,6 +18,7 @@ impl GitSerDe for Tree {
             repo,
             items: Vec::new(),
         };
+        log::debug!("Deserializing tree object...");
         tree.deserialize(data);
         return tree;
     }
@@ -74,16 +75,26 @@ fn tree_parse_one(raw: &Vec<u8>, start: Option<usize>) -> Option<(usize, Leaf)> 
         Some(start) => start,
     };
 
+    log::debug!("Running tree_parse_one with start argument of {:?}", start);
+
     // Find the space terminating the file mode value
     let x = raw.iter().skip(start).position(|b| b == &b' ')? + start;
     assert!(x - start == 5 || x - start == 6);
 
     // Read the file mode
     let mode = &raw[start..x];
+    log::debug!(
+        "Mode slice is: {:?}",
+        String::from_utf8(mode.to_vec()).unwrap()
+    );
 
     // Find the NUL terminator of the path value and read the path
     let y = raw.iter().skip(x).position(|b| b == &b'\x00')? + x;
     let path = &raw[x + 1..y];
+    log::debug!(
+        "Path slice is: {:?}",
+        String::from_utf8(path.to_vec()).unwrap()
+    );
 
     // Read the SHA and convert it to a hex string
     let sha = hex::encode(&raw[y + 1..y + 21]);
