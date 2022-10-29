@@ -6,7 +6,7 @@ use super::git_object::GitSerDe;
 
 pub(crate) struct Commit {
     repo: Option<Repository>,
-    kvlm: BTreeMap<String, Vec<String>>,
+    pub(crate) kvlm: BTreeMap<String, Vec<String>>,
 }
 
 impl Commit {

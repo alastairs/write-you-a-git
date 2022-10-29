@@ -15,7 +15,7 @@ pub mod repository {
         git_blob::Blob,
         git_commit::Commit,
         git_object::{GitObjectData, GitSerDe},
-        git_tree::Tree,
+        git_tree::{Leaf, Tree},
     };
 
     /// A git repository
@@ -31,6 +31,8 @@ pub mod repository {
         FromUtf8Error(FromUtf8Error),
         IO(io::Error),
         ParseIntError(ParseIntError),
+        TreeNotFoundError,
+        InvalidPathError,
     }
 
     impl Repository {
@@ -301,6 +303,39 @@ pub mod repository {
             for p in parents {
                 print!("c_{} -> c_{};", sha, p);
                 self.log_graphviz(p.to_string(), seen)?;
+            }
+
+            return Ok(());
+        }
+
+        pub(crate) fn tree_checkout(
+            &self,
+            tree: &Tree,
+            path: &PathBuf,
+        ) -> Result<(), ReadObjectErrorType> {
+            for Leaf(_, object_path, sha) in &tree.items {
+                let object = self.read_object(sha.clone())?;
+                let dest = path.join(object_path);
+
+                let tree = object.as_any().downcast_ref::<Tree>();
+                match tree {
+                    Some(tree) => {
+                        create_dir_all(dest).map_err(ReadObjectErrorType::IO)?;
+                        self.tree_checkout(tree, &path)?;
+                    }
+                    None => {
+                        let blob = object.as_any().downcast_ref::<Blob>();
+                        match blob {
+                            Some(blob) => {
+                                let mut f = File::create(dest).map_err(ReadObjectErrorType::IO)?;
+                                let GitObjectData(_, blob_data) = blob.get_data();
+                                f.write_all(blob_data.as_slice())
+                                    .map_err(ReadObjectErrorType::IO)?;
+                            }
+                            None => panic!(),
+                        }
+                    }
+                };
             }
 
             return Ok(());

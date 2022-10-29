@@ -3,13 +3,14 @@ mod repository;
 
 use std::{
     collections::HashSet,
-    fs::File,
+    fs::{create_dir_all, File},
     io::{stdout, Read, Write},
     path::Path,
 };
 
 use clap::{Parser, Subcommand};
 use git_objects::{
+    git_commit::Commit,
     git_object::GitObjectData,
     git_tree::{Leaf, Tree},
 };
@@ -68,6 +69,16 @@ enum GitCommands {
         /// The object to show.
         object: String,
     },
+
+    /// Checkout a commit inside of a directory.
+    #[command(about)]
+    Checkout {
+        /// The commit or tree to checkout.
+        commit: String,
+
+        /// The EMPTY directory to checkout on.
+        path: String,
+    },
 }
 
 fn main() -> Result<(), ReadObjectErrorType> {
@@ -91,6 +102,7 @@ fn main() -> Result<(), ReadObjectErrorType> {
             None => print_log("HEAD".to_string()),
         },
         Some(GitCommands::LsTree { object }) => ls_tree(&object),
+        Some(GitCommands::Checkout { commit, path }) => checkout(commit, path),
         None => Ok({}),
     };
 }
@@ -170,5 +182,54 @@ fn ls_tree(object: &String) -> Result<(), ReadObjectErrorType> {
             path
         )
     }
+    return Ok(());
+}
+
+fn checkout(commit: String, path: String) -> Result<(), ReadObjectErrorType> {
+    let repo = Repository::repo_find(".".to_string(), None)
+        .expect("No git directory when required")
+        .unwrap();
+
+    let object = repo.read_object(repo.object_find(commit, None, None))?;
+
+    // If the object is a commit, grab its tree
+    let commit = object.as_any().downcast_ref::<Commit>();
+
+    let tree_candidate = match commit {
+        Some(commit) => repo.read_object(
+            commit
+                .kvlm
+                .get("tree")
+                .ok_or(ReadObjectErrorType::TreeNotFoundError)?[0]
+                .clone(),
+        )?,
+        None => object,
+    };
+
+    let tree = match tree_candidate.as_any().downcast_ref::<Tree>() {
+        Some(tree) => tree,
+        None => panic!("Not a tree object!"),
+    };
+
+    let path = Path::new(&path);
+    if path.exists() {
+        if !path.is_dir() {
+            return Err(ReadObjectErrorType::InvalidPathError);
+        }
+
+        let is_empty = path
+            .read_dir()
+            .map_err(ReadObjectErrorType::IO)?
+            .next()
+            .is_none();
+        if !is_empty {
+            return Err(ReadObjectErrorType::InvalidPathError);
+        }
+    } else {
+        create_dir_all(&path).map_err(ReadObjectErrorType::IO)?;
+    }
+
+    repo.tree_checkout(tree, &path.canonicalize().map_err(ReadObjectErrorType::IO)?)?;
+
     return Ok(());
 }
